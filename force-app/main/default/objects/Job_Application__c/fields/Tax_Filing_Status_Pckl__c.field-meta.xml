@@ -17,9 +17,9 @@
                 <label>Single</label>
             </value>
             <value>
-                <fullName>Married, filling jointly</fullName>
+                <fullName>Married, filing jointly</fullName>
                 <default>false</default>
-                <label>Married, filling jointly</label>
+                <label>Married, filing jointly</label>
             </value>
             <value>
                 <fullName>Married, filing separately</fullName>
