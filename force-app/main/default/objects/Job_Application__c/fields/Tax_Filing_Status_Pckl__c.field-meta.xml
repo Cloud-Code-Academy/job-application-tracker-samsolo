@@ -13,7 +13,7 @@
             <sorted>false</sorted>
             <value>
                 <fullName>Single</fullName>
-                <default>false</default>
+                <default>true</default>
                 <label>Single</label>
             </value>
             <value>
