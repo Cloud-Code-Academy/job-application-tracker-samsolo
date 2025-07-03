@@ -14,7 +14,7 @@
             <sorted>false</sorted>
             <value>
                 <fullName>Saved</fullName>
-                <default>false</default>
+                <default>true</default>
                 <label>Saved</label>
             </value>
             <value>
