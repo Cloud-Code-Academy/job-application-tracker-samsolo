@@ -118,7 +118,7 @@ private class JobApplicationTriggerHelper_Test {
         Test.stopTest();
 
         System.assertEquals(110000, jobApp.Taxable_Income_Curr__c, 'Taxable income for Married/Itemized is incorrect.');
-        System.assertEquals(12723, jobApp.Estimated_Federal_Tax_Curr__c.setScale(0, RoundingMode.HALF_UP), 'Estimated tax for Married/Itemized is incorrect.');
+        System.assertEquals(14028, jobApp.Estimated_Federal_Tax_Curr__c.setScale(0, RoundingMode.HALF_UP), 'Estimated tax for Married/Itemized is incorrect.');
     }
 
     // New test for the edge case where taxable income could be negative
