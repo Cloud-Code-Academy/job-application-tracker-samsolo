@@ -11,7 +11,7 @@ private class JobApplicationTriggerHelper_Test {
         insert testContact;
         
         Job_Application__c testJobApp = new Job_Application__c(
-            Status_Pckl__c = 'Saved', // Using your picklist value
+            Status_Pckl__c = 'Saved',
             Salary_Curr__c = 60000,
             Tax_Filing_Status_Pckl__c = 'Single'
         );
@@ -23,7 +23,7 @@ private class JobApplicationTriggerHelper_Test {
     static void testCreateTaskOnStatusChange() {
         Job_Application__c jobApp = [SELECT Id, Status_Pckl__c FROM Job_Application__c LIMIT 1];
         
-        jobApp.Status_Pckl__c = 'Applying'; // Using your picklist value
+        jobApp.Status_Pckl__c = 'Applying';
         Test.startTest();
         update jobApp;
         Test.stopTest();
@@ -100,7 +100,9 @@ private class JobApplicationTriggerHelper_Test {
         Job_Application__c jobApp = new Job_Application__c(Status_Pckl__c = 'Saved', Salary_Curr__c = 150000, Tax_Filing_Status_Pckl__c = 'Single');
         insert jobApp;
 
-        // Query all fields needed for comparison in the helper method
+        // Manually set the Annual Gross Income on the in-memory variable
+        jobApp.Annual_Gross_Income_Curr__c = jobApp.Salary_Curr__c;
+
         Job_Application__c oldJobApp = [
             SELECT Id, Annual_Gross_Income_Curr__c, Salary_Curr__c, Tax_Filing_Status_Pckl__c,
                    Deduction_Type_Pckl__c, Itemized_Deductions_Curr__c, Taxes_Withheld_Curr__c
@@ -125,7 +127,9 @@ private class JobApplicationTriggerHelper_Test {
         Job_Application__c jobApp = new Job_Application__c(Status_Pckl__c = 'Saved', Salary_Curr__c = 20000, Tax_Filing_Status_Pckl__c = 'Married, filing jointly');
         insert jobApp;
 
-        // Query all fields needed for comparison in the helper method
+        // Manually set the Annual Gross Income on the in-memory variable
+        jobApp.Annual_Gross_Income_Curr__c = jobApp.Salary_Curr__c;
+
         Job_Application__c oldJobApp = [
             SELECT Id, Annual_Gross_Income_Curr__c, Salary_Curr__c, Tax_Filing_Status_Pckl__c,
                    Deduction_Type_Pckl__c, Itemized_Deductions_Curr__c, Taxes_Withheld_Curr__c
@@ -148,7 +152,9 @@ private class JobApplicationTriggerHelper_Test {
         Job_Application__c jobApp = new Job_Application__c(Status_Pckl__c = 'Saved', Salary_Curr__c = 90000, Tax_Filing_Status_Pckl__c = 'Single');
         insert jobApp;
 
-        // Query all fields needed for comparison in the helper method
+        // Manually set the Annual Gross Income on the in-memory variable
+        jobApp.Annual_Gross_Income_Curr__c = jobApp.Salary_Curr__c;
+        
         Job_Application__c oldJobApp = [
             SELECT Id, Annual_Gross_Income_Curr__c, Salary_Curr__c, Tax_Filing_Status_Pckl__c,
                    Deduction_Type_Pckl__c, Itemized_Deductions_Curr__c, Taxes_Withheld_Curr__c
