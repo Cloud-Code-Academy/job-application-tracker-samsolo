@@ -1,5 +1,11 @@
 public with sharing class JobApplicationTriggerHelper {
 
+    // --- Constants for Tax Calculations (as of 2023/2024) ---
+
+    private static final Decimal SOCIAL_SECURITY_RATE = 0.062;
+    private static final Decimal SOCIAL_SECURITY_LIMIT = 168600; // 2024 limit
+    private static final Decimal MEDICARE_RATE = 0.0145;
+
     // CREATE TASK METHOD: Create a new task when the status of a Job Application changes
     public static void createTask(List<Job_Application__c> jobApps, Map<Id, Job_Application__c> oldJobApps) {
         
@@ -25,7 +31,6 @@ public with sharing class JobApplicationTriggerHelper {
     // SET PRIMARY CONTACT METHOD: Sets the Job Application Primary Contact
     public static void setPrimaryContactOnFirstRelation(List<Job_Application__c> jobApps) {
 
-       // Collect Job Application IDs that need a primary contact
        Set<Id> jobAppIds = new Set<Id>();
         for (Job_Application__c jobApp : jobApps) {
             if (jobApp.Primary_Contact_Id__c == null && jobApp.Number_of_Related_Contacts_Rollup__c > 0) {
@@ -33,12 +38,10 @@ public with sharing class JobApplicationTriggerHelper {
             }
         }
         
-        // If no Job Applications need a primary contact, exit early
         if (jobAppIds.isEmpty()) {
             return;
         }
 
-        // Query for Job Application Contacts related to the identified Job Applications
         List<Job_Application_Contact__c> jobApplicationContacts = [
             SELECT Job_Application_Id__c, Contact_Id__c
             FROM Job_Application_Contact__c 
@@ -46,7 +49,6 @@ public with sharing class JobApplicationTriggerHelper {
             ORDER BY CreatedDate ASC
         ];
 
-        // Create a map to hold the first contact for each Job Application
         Map<Id, Id> primaryContactMap = new Map<Id, Id>();
         for (Job_Application_Contact__c jac : jobApplicationContacts) {
             if(!primaryContactMap.containsKey(jac.Job_Application_Id__c)) {
@@ -54,8 +56,6 @@ public with sharing class JobApplicationTriggerHelper {
             }
         }
 
-        // Update the Job Applications with the primary contact
-        // If a Job Application already has a primary contact, it will not be overwritten
         for (Job_Application__c jobApp : jobApps) {
             if (primaryContactMap.containsKey(jobApp.Id)) {
                 jobApp.Primary_Contact_Id__c = primaryContactMap.get(jobApp.Id);
@@ -80,32 +80,26 @@ public with sharing class JobApplicationTriggerHelper {
         for (Job_Application__c jobApp : jobApps) {
             Job_Application__c oldJobApp = oldJobApps.get(jobApp.Id);
 
-            // Sync Annual Gross Income from Salary (If it wasn't manually changed)
             if (jobApp.Annual_Gross_Income_Curr__c == oldJobApp.Annual_Gross_Income_Curr__c) {
                 if (jobApp.Salary_Curr__c != oldJobApp.Salary_Curr__c) {
                     jobApp.Annual_Gross_Income_Curr__c = jobApp.Salary_Curr__c;
                 }
             }
 
-            // Determine if a Tax Recalculation is Needed 
             Boolean needsRecalculation = (
-                
                 jobApp.Salary_Curr__c != oldJobApp.Salary_Curr__c ||
                 jobApp.Tax_Filing_Status_Pckl__c != oldJobApp.Tax_Filing_Status_Pckl__c ||
                 jobApp.Annual_Gross_Income_Curr__c != oldJobApp.Annual_Gross_Income_Curr__c ||
                 jobApp.Deduction_Type_Pckl__c != oldJobApp.Deduction_Type_Pckl__c ||
                 jobApp.Itemized_Deductions_Curr__c != oldJobApp.Itemized_Deductions_Curr__c ||
                 jobApp.Taxes_Withheld_Curr__c != oldJobApp.Taxes_Withheld_Curr__c
-                
             );
 
-            // Run ALL calculations only if needed
             if (needsRecalculation && jobApp.Annual_Gross_Income_Curr__c != null) {
 
-                // Calculate Taxable Income
+                // --- Federal Tax Calculation ---
                 Decimal totalDeductions = 0;
                 if (jobApp.Deduction_Type_Pckl__c == 'Standard Deduction') {
-                    // Standard Deduction amount depends on filing status
                     if (jobApp.Tax_Filing_Status_Pckl__c == 'Single' || jobApp.Tax_Filing_Status_Pckl__c == 'Married, filing separately') {
                         totalDeductions = 15000;
                     } else if (jobApp.Tax_Filing_Status_Pckl__c == 'Married, filing jointly') {
@@ -114,50 +108,47 @@ public with sharing class JobApplicationTriggerHelper {
                         totalDeductions = 22500;
                     }
                 } else {
-                    // Use itemized deductions, defaulting to 0 if null
-                    if (jobApp.Itemized_Deductions_Curr__c == null) {
-                        totalDeductions = 0;
-                    } else {
-                        totalDeductions = jobApp.Itemized_Deductions_Curr__c;
-                    }
+                    totalDeductions = (jobApp.Itemized_Deductions_Curr__c == null) ? 0 : jobApp.Itemized_Deductions_Curr__c;
                 }
 
-                jobApp.Taxable_Income_Curr__c = jobApp.Annual_Gross_Income_Curr__c - totalDeductions;
-
-                if (jobApp.Taxable_Income_Curr__c < 0) {
-                    jobApp.Taxable_Income_Curr__c = 0;
-                }
-
-                // Calculate Estimated Federal Tax
-                Decimal taxableIncome = jobApp.Taxable_Income_Curr__c;
-                String filingStatus = jobApp.Tax_Filing_Status_Pckl__c;
-                Decimal estimatedTaxes = 0;
-
-                if (filingStatus == 'Single') {
-                    estimatedTaxes = calculateSingleFilerTaxes(taxableIncome);
-                } else if (filingStatus == 'Married, filing jointly') {
-                    estimatedTaxes = calculateMarriedJointlyTaxes(taxableIncome);
-                } else if (filingStatus == 'Married, filing separately') {
-                    estimatedTaxes = calculateMarriedSeparatelyTaxes(taxableIncome);
-                } else if (filingStatus == 'Head of Household') {
-                    estimatedTaxes = calculateHeadOfHouseholdTaxes(taxableIncome);
-                }
+                jobApp.Taxable_Income_Curr__c = Math.max(0, jobApp.Annual_Gross_Income_Curr__c - totalDeductions);
                 
-                jobApp.Estimated_Federal_Tax_Curr__c = estimatedTaxes.setScale(2, RoundingMode.HALF_UP);
+                jobApp.Estimated_Federal_Tax_Curr__c = calculateFederalTax(
+                    jobApp.Taxable_Income_Curr__c, jobApp.Tax_Filing_Status_Pckl__c
+                ).setScale(2, RoundingMode.HALF_UP);
 
-                // Calculate Final Tax Due or Refund
-                Decimal withheldAmount;
-                if (jobApp.Taxes_Withheld_Curr__c == null) {
-                    withheldAmount = 0;
-                } else {
-                    withheldAmount = jobApp.Taxes_Withheld_Curr__c;
-                }
+                // --- FICA Tax Calculations (Social Security & Medicare) ---
+                Decimal grossIncome = jobApp.Annual_Gross_Income_Curr__c;
+                Decimal socialSecurityEligibleIncome = Math.min(grossIncome, SOCIAL_SECURITY_LIMIT);
+                jobApp.Social_Security_Tax_Curr__c = (socialSecurityEligibleIncome * SOCIAL_SECURITY_RATE).setScale(2, RoundingMode.HALF_UP);
+                jobApp.Medicare_Tax_Curr__c = (grossIncome * MEDICARE_RATE).setScale(2, RoundingMode.HALF_UP);
+
+                // --- Take-Home Pay Calculations ---
+                Decimal totalTaxes = jobApp.Estimated_Federal_Tax_Curr__c + jobApp.Social_Security_Tax_Curr__c + jobApp.Medicare_Tax_Curr__c;
+                jobApp.Take_Home_Pay_Yearly_Curr__c = grossIncome - totalTaxes;
+                jobApp.Take_Home_Pay_Monthly_Curr__c = jobApp.Take_Home_Pay_Yearly_Curr__c / 12;
+
+                // --- Original Tax Due/Refund Calculation ---
+                Decimal withheldAmount = (jobApp.Taxes_Withheld_Curr__c == null) ? 0 : jobApp.Taxes_Withheld_Curr__c;
                 jobApp.Tax_Due_Refund_Curr__c = jobApp.Estimated_Federal_Tax_Curr__c - withheldAmount;
             }
         }
     }
 
-    // PRIVATE HELPER METHODS FOR TAX CALCULATIONS
+    // --- PRIVATE HELPER METHODS FOR TAX CALCULATIONS ---
+    private static Decimal calculateFederalTax(Decimal taxableIncome, String filingStatus) {
+        if (filingStatus == 'Single') {
+            return calculateSingleFilerTaxes(taxableIncome);
+        } else if (filingStatus == 'Married, filing jointly') {
+            return calculateMarriedJointlyTaxes(taxableIncome);
+        } else if (filingStatus == 'Married, filing separately') {
+            return calculateMarriedSeparatelyTaxes(taxableIncome);
+        } else if (filingStatus == 'Head of Household') {
+            return calculateHeadOfHouseholdTaxes(taxableIncome);
+        }
+        return 0;
+    }
+
     private static Decimal calculateSingleFilerTaxes(Decimal taxableIncome) {
         if (taxableIncome <= 0) { return 0; }
         if (taxableIncome <= 11925) { return taxableIncome * 0.10; }

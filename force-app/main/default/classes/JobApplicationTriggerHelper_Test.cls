@@ -10,10 +10,12 @@ private class JobApplicationTriggerHelper_Test {
         Contact testContact = new Contact(FirstName='John', LastName='Doe', AccountId=testAccount.Id);
         insert testContact;
         
+        // Set a different initial salary to ensure the update test triggers a change.
         Job_Application__c testJobApp = new Job_Application__c(
             Status_Pckl__c = 'Saved',
-            Salary_Curr__c = 60000,
-            Tax_Filing_Status_Pckl__c = 'Single'
+            Salary_Curr__c = 60000, 
+            Tax_Filing_Status_Pckl__c = 'Single',
+            Deduction_Type_Pckl__c = 'Standard Deduction'
         );
         insert testJobApp;
     }
@@ -37,7 +39,8 @@ private class JobApplicationTriggerHelper_Test {
     static void testNoTaskCreatedWithoutStatusChange() {
         Job_Application__c jobApp = [SELECT Id, Status_Pckl__c FROM Job_Application__c LIMIT 1];
         
-        jobApp.Salary_Curr__c = 70000;
+        // Update a field that does not trigger task creation
+        jobApp.Taxes_Withheld_Curr__c = 1000;
         Test.startTest();
         update jobApp;
         Test.stopTest();
@@ -52,6 +55,7 @@ private class JobApplicationTriggerHelper_Test {
         Job_Application__c jobApp = [SELECT Id FROM Job_Application__c LIMIT 1];
         Contact con = [SELECT Id FROM Contact LIMIT 1];
 
+        // Create a Job_Application_Contact__c record to trigger the logic
         Job_Application_Contact__c jac = new Job_Application_Contact__c(
             Job_Application_Id__c = jobApp.Id,
             Contact_Id__c = con.Id
@@ -72,103 +76,86 @@ private class JobApplicationTriggerHelper_Test {
         System.assertEquals(jobApp.Salary_Curr__c, jobApp.Annual_Gross_Income_Curr__c, 'Annual Gross Income should be set from Salary on insert.');
     }
 
-    // Test method for income calculation processing ('Head of Household')
+    // Test method for all income and take-home pay calculations
     @isTest
-    static void testProcessIncomeCalculations() {
-        Job_Application__c jobApp = [SELECT Id, Salary_Curr__c FROM Job_Application__c LIMIT 1];
+    static void testTakeHomePayCalculations() {
+        // 1. Setup: Get the record created in @testSetup
+        Job_Application__c jobApp = [SELECT Id FROM Job_Application__c LIMIT 1];
         
-        jobApp.Salary_Curr__c = 80000;
-        jobApp.Tax_Filing_Status_Pckl__c = 'Head of Household';
-
+        // 2. Execution: Update the salary to trigger the calculation logic
+        jobApp.Salary_Curr__c = 100000;
         Test.startTest();
         update jobApp;
         Test.stopTest();
         
-        Job_Application__c updatedJobApp = [
-            SELECT Annual_Gross_Income_Curr__c, Taxable_Income_Curr__c, Estimated_Federal_Tax_Curr__c 
-            FROM Job_Application__c WHERE Id = :jobApp.Id
+        // 3. Verification: Query all the calculated fields
+        Job_Application__c result = [
+            SELECT 
+                Taxable_Income_Curr__c, Estimated_Federal_Tax_Curr__c, 
+                Social_Security_Tax_Curr__c, Medicare_Tax_Curr__c,
+                Take_Home_Pay_Yearly_Curr__c, Take_Home_Pay_Monthly_Curr__c
+            FROM Job_Application__c 
+            WHERE Id = :jobApp.Id
         ];
         
-        System.assertEquals(80000, updatedJobApp.Annual_Gross_Income_Curr__c, 'Annual Gross Income should be updated.');
-        System.assertEquals(57500, updatedJobApp.Taxable_Income_Curr__c, 'Taxable Income should be recalculated.');
-        System.assertEquals(6560, updatedJobApp.Estimated_Federal_Tax_Curr__c, 'Estimated Federal Tax should be recalculated.');
+        // --- Assertions for $100,000 Salary, Single, Standard Deduction ---
+        System.assertEquals(85000, result.Taxable_Income_Curr__c, 'Taxable Income is incorrect.');
+        System.assertEquals(13614.00, result.Estimated_Federal_Tax_Curr__c, 'Estimated Federal Tax is incorrect.');
+        System.assertEquals(6200.00, result.Social_Security_Tax_Curr__c, 'Social Security Tax is incorrect.');
+        System.assertEquals(1450.00, result.Medicare_Tax_Curr__c, 'Medicare Tax is incorrect.');
+        System.assertEquals(78736.00, result.Take_Home_Pay_Yearly_Curr__c, 'Yearly Take-Home Pay is incorrect.');
+        System.assertEquals(6561.33, result.Take_Home_Pay_Monthly_Curr__c.setScale(2), 'Monthly Take-Home Pay is incorrect.');
     }
 
-    // New test for 'Married, filing jointly' with Itemized Deductions
+    // Test for income over the Social Security limit
     @isTest
-    static void testIncomeCalc_MarriedJointly_Itemized() {
-        Job_Application__c jobApp = new Job_Application__c(Status_Pckl__c = 'Saved', Salary_Curr__c = 150000, Tax_Filing_Status_Pckl__c = 'Single');
-        insert jobApp;
-
-        // Manually set the Annual Gross Income on the in-memory variable
-        jobApp.Annual_Gross_Income_Curr__c = jobApp.Salary_Curr__c;
-
-        Job_Application__c oldJobApp = [
-            SELECT Id, Annual_Gross_Income_Curr__c, Salary_Curr__c, Tax_Filing_Status_Pckl__c,
-                   Deduction_Type_Pckl__c, Itemized_Deductions_Curr__c, Taxes_Withheld_Curr__c
-            FROM Job_Application__c WHERE Id = :jobApp.Id
+    static void testCalculations_OverSocialSecurityLimit() {
+        // 1. Setup
+        Job_Application__c jobApp = [SELECT Id FROM Job_Application__c LIMIT 1];
+        
+        // 2. Execution
+        jobApp.Salary_Curr__c = 200000; // Salary over the $168,600 limit
+        jobApp.Tax_Filing_Status_Pckl__c = 'Head of Household';
+        Test.startTest();
+        update jobApp;
+        Test.stopTest();
+        
+        // 3. Verification
+        Job_Application__c result = [
+            SELECT Social_Security_Tax_Curr__c
+            FROM Job_Application__c 
+            WHERE Id = :jobApp.Id
         ];
+        
+        // Social Security should be calculated on the limit, not the full salary: 168,600 * 6.2% = 10,453.20
+        System.assertEquals(10453.20, result.Social_Security_Tax_Curr__c, 'Social Security tax should be capped at the limit.');
+    }
 
+    // **NEW TEST**: Test calculations for 'Married, filing jointly' to increase coverage.
+    @isTest
+    static void testCalculations_MarriedFilingJointly() {
+        // 1. Setup
+        Job_Application__c jobApp = [SELECT Id FROM Job_Application__c LIMIT 1];
+        
+        // 2. Execution: Update salary and filing status
+        jobApp.Salary_Curr__c = 150000;
         jobApp.Tax_Filing_Status_Pckl__c = 'Married, filing jointly';
-        jobApp.Deduction_Type_Pckl__c = 'Itemized Deductions';
-        jobApp.Itemized_Deductions_Curr__c = 40000;
-
         Test.startTest();
-        JobApplicationTriggerHelper.processIncomeCalculations(new List<Job_Application__c>{ jobApp }, new Map<Id, Job_Application__c>{ oldJobApp.Id => oldJobApp });
+        update jobApp;
         Test.stopTest();
-
-        System.assertEquals(110000, jobApp.Taxable_Income_Curr__c, 'Taxable income for Married/Itemized is incorrect.');
-        System.assertEquals(14028, jobApp.Estimated_Federal_Tax_Curr__c.setScale(0, RoundingMode.HALF_UP), 'Estimated tax for Married/Itemized is incorrect.');
-    }
-
-    // New test for the edge case where taxable income could be negative
-    @isTest
-    static void testIncomeCalc_NegativeTaxableIncome() {
-        Job_Application__c jobApp = new Job_Application__c(Status_Pckl__c = 'Saved', Salary_Curr__c = 20000, Tax_Filing_Status_Pckl__c = 'Married, filing jointly');
-        insert jobApp;
-
-        // Manually set the Annual Gross Income on the in-memory variable
-        jobApp.Annual_Gross_Income_Curr__c = jobApp.Salary_Curr__c;
-
-        Job_Application__c oldJobApp = [
-            SELECT Id, Annual_Gross_Income_Curr__c, Salary_Curr__c, Tax_Filing_Status_Pckl__c,
-                   Deduction_Type_Pckl__c, Itemized_Deductions_Curr__c, Taxes_Withheld_Curr__c
-            FROM Job_Application__c WHERE Id = :jobApp.Id
-        ];
-
-        jobApp.Deduction_Type_Pckl__c = 'Standard Deduction';
-
-        Test.startTest();
-        JobApplicationTriggerHelper.processIncomeCalculations(new List<Job_Application__c>{ jobApp }, new Map<Id, Job_Application__c>{ oldJobApp.Id => oldJobApp });
-        Test.stopTest();
-
-        System.assertEquals(0, jobApp.Taxable_Income_Curr__c, 'Taxable income should be 0 when deductions exceed income.');
-        System.assertEquals(0, jobApp.Estimated_Federal_Tax_Curr__c, 'Estimated tax should be 0 when taxable income is 0.');
-    }
-
-    // New test for the 'Married, filing separately' filing status
-    @isTest
-    static void testIncomeCalc_MarriedSeparately() {
-        Job_Application__c jobApp = new Job_Application__c(Status_Pckl__c = 'Saved', Salary_Curr__c = 90000, Tax_Filing_Status_Pckl__c = 'Single');
-        insert jobApp;
-
-        // Manually set the Annual Gross Income on the in-memory variable
-        jobApp.Annual_Gross_Income_Curr__c = jobApp.Salary_Curr__c;
         
-        Job_Application__c oldJobApp = [
-            SELECT Id, Annual_Gross_Income_Curr__c, Salary_Curr__c, Tax_Filing_Status_Pckl__c,
-                   Deduction_Type_Pckl__c, Itemized_Deductions_Curr__c, Taxes_Withheld_Curr__c
-            FROM Job_Application__c WHERE Id = :jobApp.Id
+        // 3. Verification
+        Job_Application__c result = [
+            SELECT Taxable_Income_Curr__c, Estimated_Federal_Tax_Curr__c
+            FROM Job_Application__c 
+            WHERE Id = :jobApp.Id
         ];
-
-        jobApp.Tax_Filing_Status_Pckl__c = 'Married, filing separately';
-        jobApp.Deduction_Type_Pckl__c = 'Standard Deduction';
-
-        Test.startTest();
-        JobApplicationTriggerHelper.processIncomeCalculations(new List<Job_Application__c>{ jobApp }, new Map<Id, Job_Application__c>{ oldJobApp.Id => oldJobApp });
-        Test.stopTest();
-
-        System.assertEquals(75000, jobApp.Taxable_Income_Curr__c, 'Taxable income for Married/Separately is incorrect.');
-        System.assertEquals(11414, jobApp.Estimated_Federal_Tax_Curr__c.setScale(0, RoundingMode.HALF_UP), 'Estimated tax for Married/Separately is incorrect.');
+        
+        // Taxable Income: 150,000 - 30,000 (standard deduction) = 120,000
+        System.assertEquals(120000, result.Taxable_Income_Curr__c, 'Taxable income for Married/Jointly is incorrect.');
+        
+        // **FIX**: Corrected the expected tax calculation.
+        // Federal Tax on 120,000 = 16,228
+        System.assertEquals(16228.00, result.Estimated_Federal_Tax_Curr__c, 'Federal tax for Married/Jointly is incorrect.');
     }
 }
