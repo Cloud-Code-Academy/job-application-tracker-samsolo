@@ -27,7 +27,6 @@ private class EventService_Test {
         );
         insert testEvent;
 
-        // Query the event again to ensure all formula fields and relationships are loaded.
         List<Event> eventsToRemind = [
             SELECT Id, Subject, StartDateTime, Owner.Name, Owner.Email 
             FROM Event 
@@ -36,13 +35,11 @@ private class EventService_Test {
         
         Test.startTest();
         
-        // Get the number of email invocations before our method runs.
         Integer emailsBefore = Limits.getEmailInvocations();
 
         // 2. Execution: Call the service method.
         EventService.sendReminders(eventsToRemind);
 
-        // Get the number of email invocations after our method runs.
         Integer emailsAfter = Limits.getEmailInvocations();
         
         Test.stopTest();
@@ -54,23 +51,15 @@ private class EventService_Test {
     // Test the case where the event owner has no email address.
     @isTest
     static void testSendReminders_NoOwnerEmail() {
-        // 1. Setup: Create a User without an email and an Event they own.
-        User userWithNoEmail = new User(
-            ProfileId = [SELECT Id FROM Profile WHERE Name='Standard User'].Id,
-            LastName = 'Smith',
-            FirstName = 'Jane',
-            // Email is intentionally left null
-            Username = 'jane.smith@test.com' + System.currentTimeMillis(),
-            Alias = 'jsmith',
-            TimeZoneSidKey = 'America/Los_Angeles',
-            EmailEncodingKey = 'UTF-8',
-            LanguageLocaleKey = 'en_US',
-            LocaleSidKey = 'en_US'
-        );
-        insert userWithNoEmail;
+        // Create a Queue as the owner since Queues don't have emails.
+        Group testQueue = new Group(Name = 'Test Event Queue', Type = 'Queue');
+        insert testQueue;
 
+        System.assert(testQueue.Email == null, 'The test queue should not have an email address.');
+
+        // 1. Setup: Create an Event owned by the Queue.
         Event testEvent = new Event(
-            OwnerId = userWithNoEmail.Id,
+            OwnerId = testQueue.Id,
             Subject = 'Team Lunch',
             StartDateTime = Datetime.now().addDays(1),
             EndDateTime = Datetime.now().addDays(1).addHours(1)
@@ -93,7 +82,7 @@ private class EventService_Test {
         Test.stopTest();
 
         // 3. Verification: Assert that no email was sent.
-        System.assertEquals(0, emailsAfter - emailsBefore, 'No email should be sent if the owner has no email address.');
+        System.assertEquals(0, emailsAfter - emailsBefore, 'No email should be sent if the owner is a Queue.');
     }
 
     // Test the edge case where the input list is empty.
