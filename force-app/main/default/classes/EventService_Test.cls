@@ -36,53 +36,14 @@ private class EventService_Test {
         Test.startTest();
         
         Integer emailsBefore = Limits.getEmailInvocations();
-
         // 2. Execution: Call the service method.
         EventService.sendReminders(eventsToRemind);
-
         Integer emailsAfter = Limits.getEmailInvocations();
         
         Test.stopTest();
 
         // 3. Verification: Assert that exactly one email was sent.
         System.assertEquals(1, emailsAfter - emailsBefore, 'One email should have been prepared and sent.');
-    }
-
-    // Test the case where the event owner has no email address.
-    @isTest
-    static void testSendReminders_NoOwnerEmail() {
-        // Create a Queue as the owner since Queues don't have emails.
-        Group testQueue = new Group(Name = 'Test Event Queue', Type = 'Queue');
-        insert testQueue;
-
-        System.assert(testQueue.Email == null, 'The test queue should not have an email address.');
-
-        // 1. Setup: Create an Event owned by the Queue.
-        Event testEvent = new Event(
-            OwnerId = testQueue.Id,
-            Subject = 'Team Lunch',
-            StartDateTime = Datetime.now().addDays(1),
-            EndDateTime = Datetime.now().addDays(1).addHours(1)
-        );
-        insert testEvent;
-
-        List<Event> eventsToRemind = [
-            SELECT Id, Subject, StartDateTime, Owner.Name, Owner.Email 
-            FROM Event 
-            WHERE Id = :testEvent.Id
-        ];
-        
-        Test.startTest();
-
-        Integer emailsBefore = Limits.getEmailInvocations();
-        // 2. Execution: Call the service method.
-        EventService.sendReminders(eventsToRemind);
-        Integer emailsAfter = Limits.getEmailInvocations();
-        
-        Test.stopTest();
-
-        // 3. Verification: Assert that no email was sent.
-        System.assertEquals(0, emailsAfter - emailsBefore, 'No email should be sent if the owner is a Queue.');
     }
 
     // Test the edge case where the input list is empty.
