@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Tax_Filing_Status_Pckl__c</fullName>
+    <externalId>false</externalId>
+    <label>Tax Filing Status</label>
+    <required>false</required>
+    <trackHistory>false</trackHistory>
+    <trackTrending>false</trackTrending>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value>
+                <fullName>Single</fullName>
+                <default>true</default>
+                <label>Single</label>
+            </value>
+            <value>
+                <fullName>Married, filing jointly</fullName>
+                <default>false</default>
+                <label>Married, filing jointly</label>
+            </value>
+            <value>
+                <fullName>Married, filing separately</fullName>
+                <default>false</default>
+                <label>Married, filing separately</label>
+            </value>
+            <value>
+                <fullName>Head of household</fullName>
+                <default>false</default>
+                <label>Head of household</label>
+            </value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>
