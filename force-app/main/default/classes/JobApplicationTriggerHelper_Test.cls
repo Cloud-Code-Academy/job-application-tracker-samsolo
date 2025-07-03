@@ -117,7 +117,7 @@ private class JobApplicationTriggerHelper_Test {
     static void testIncomeCalc_MarriedJointly_Itemized() {
         // Setup: Create a new Job Application for this specific test
         Job_Application__c jobApp = new Job_Application__c(
-            Status_Pckl__c = 'New',
+            Status_Pckl__c = 'Saved',
             Salary_Curr__c = 150000,
             Tax_Filing_Status_Pckl__c = 'Single' // Start as single
         );
@@ -148,7 +148,7 @@ private class JobApplicationTriggerHelper_Test {
     @isTest
     static void testIncomeCalc_NegativeTaxableIncome() {
         Job_Application__c jobApp = new Job_Application__c(
-            Status_Pckl__c = 'New',
+            Status_Pckl__c = 'Saved',
             Salary_Curr__c = 20000,
             Tax_Filing_Status_Pckl__c = 'Married, filing jointly' // Standard deduction is $30,000
         );
@@ -173,7 +173,7 @@ private class JobApplicationTriggerHelper_Test {
     @isTest
     static void testIncomeCalc_MarriedSeparately() {
         Job_Application__c jobApp = new Job_Application__c(
-            Status_Pckl__c = 'New',
+            Status_Pckl__c = 'Saved',
             Salary_Curr__c = 90000,
             Tax_Filing_Status_Pckl__c = 'Single'
         );
