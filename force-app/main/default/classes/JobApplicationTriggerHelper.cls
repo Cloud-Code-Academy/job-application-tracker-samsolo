@@ -137,7 +137,7 @@ public with sharing class JobApplicationTriggerHelper {
                     estimatedTaxes = calculateSingleFilerTaxes(taxableIncome);
                 } else if (filingStatus == 'Married, filing jointly') {
                     estimatedTaxes = calculateMarriedJointlyTaxes(taxableIncome);
-                } else if (filingStatus == 'Married, filing separarely') {
+                } else if (filingStatus == 'Married, filing separately') {
                     estimatedTaxes = calculateMarriedSeparatelyTaxes(taxableIncome);
                 } else if (filingStatus == 'Head of Household') {
                     estimatedTaxes = calculateHeadOfHouseholdTaxes(taxableIncome);
