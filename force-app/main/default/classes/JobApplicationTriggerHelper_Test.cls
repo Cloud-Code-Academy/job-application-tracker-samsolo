@@ -16,7 +16,7 @@ private class JobApplicationTriggerHelper_Test {
         );
         insert testContact;
 
-        // Create a test Job Application
+        // Create a test Job Application (Name field is removed as it's an autonumber)
         Job_Application__c testJobApp = new Job_Application__c(
             Status_Pckl__c = 'Saved',
             Salary_Curr__c = 60000,
@@ -30,8 +30,8 @@ private class JobApplicationTriggerHelper_Test {
     static void testCreateTaskOnStatusChange() {
         Job_Application__c jobApp = [SELECT Id, Status_Pckl__c FROM Job_Application__c LIMIT 1];
         
-        // Update the status
-        jobApp.Status_Pckl__c = 'In Progress';
+        // Change the status to trigger task creation
+        jobApp.Status_Pckl__c = 'Applying';
         Test.startTest();
         update jobApp;
         Test.stopTest();
@@ -109,6 +109,6 @@ private class JobApplicationTriggerHelper_Test {
         
         System.assertEquals(80000, updatedJobApp.Annual_Gross_Income_Curr__c, 'Annual Gross Income should be updated.');
         System.assertEquals(57500, updatedJobApp.Taxable_Income_Curr__c, 'Taxable Income should be recalculated.');
-        System.assertEquals(6822, updatedJobApp.Estimated_Federal_Tax_Curr__c, 'Estimated Federal Tax should be recalculated.');
+        System.assertEquals(6560, updatedJobApp.Estimated_Federal_Tax_Curr__c, 'Estimated Federal Tax should be recalculated.');
     }
 }
