@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ValidationRule xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>JAPP01_TaxFilingStatusRequired</fullName>
+    <active>true</active>
+    <errorConditionFormula>ISCHANGED(Tax_Filing_Status_Pckl__c)
+&amp;&amp;
+ISBLANK(TEXT(Tax_Filing_Status_Pckl__c))</errorConditionFormula>
+    <errorDisplayField>Tax_Filing_Status_Pckl__c</errorDisplayField>
+    <errorMessage>[JAPP01] A tax filing status is required.</errorMessage>
+</ValidationRule>
